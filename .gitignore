@@ -1,0 +1,60 @@
+# Python缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 虚拟环境
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# LaTeX临时文件
+*.aux
+*.log
+*.out
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+
+#图片
+*.png
+# PDF文件（可选，如果需要上传PDF则删除此行）
+*.pdf
+
+# 压缩文件
+*.zip
+*.rar
+
+# 上传文件夹
+uploads/
+images/
+templates/
+
+# 测试文件
+test_*.py
