@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>迁移学习：能量调度模拟 (多区域展示)</title>
+    <!-- 引入 Chart.js 库 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* --- 页面整体样式 --- */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f7f9;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* --- 主内容容器 --- */
+        .container {
+            width: 95%;
+            max-width: 1600px;
+            background-color: #fff;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+        }
+
+        /* --- 控制按钮区域 --- */
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 25px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background-color: #3498db;
+            color: white;
+            transition: background-color 0.3s ease, transform 0.1s ease;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+        
+        button:active {
+            transform: scale(0.98);
+        }
+
+        button:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
+        }
+
+        /* --- 状态信息栏 --- */
+        #status {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 1.1em;
+            color: #7f8c8d;
+            height: 25px;
+            margin-bottom: 20px;
+        }
+
+        /* --- 图表网格布局 --- */
+        .charts-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+        }
+
+        /* --- 单个图表的包装容器 --- */
+        .chart-wrapper {
+            flex: 1;
+            min-width: 320px; /* 保证在小屏幕上不会被过度挤压 */
+            max-width: 500px; /* 在大屏幕上限制最大宽度 */
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background-color: #fdfdfd;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        }
+
+        .chart-wrapper h2 {
+            text-align: center;
+            font-size: 1.3em;
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #34495e;
+        }
+
+        /* --- 图表画布的容器，用于控制尺寸 --- */
+        .chart-container {
+            position: relative;
+            height: 35vh;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>迁移学习：能量调度模拟 (多区域展示)</h1>
+        <div class="controls">
+            <button id="btn-source" onclick="runModel('source')">1. 训练基础模型 (华北)</button>
+            <button id="btn-target1" onclick="runModel('target1')" disabled>2. 迁移到华南</button>
+            <button id="btn-target2" onclick="runModel('target2')" disabled>3. 迁移到西北</button>
+        </div>
+        <div id="status">请按顺序点击按钮执行。</div>
+
+        <div class="charts-grid">
+            <!-- 图表区域1: 基础模型 -->
+            <div class="chart-wrapper">
+                <h2>华北地区 (基础模型)</h2>
+                <div class="chart-container">
+                    <canvas id="chartSource"></canvas>
+                </div>
+            </div>
+            <!-- 图表区域2: 迁移学习目标1 -->
+            <div class="chart-wrapper">
+                <h2>华南地区 (迁移学习)</h2>
+                <div class="chart-container">
+                    <canvas id="chartTarget1"></canvas>
+                </div>
+            </div>
+            <!-- 图表区域3: 迁移学习目标2 -->
+            <div class="chart-wrapper">
+                <h2>西北地区 (迁移学习)</h2>
+                <div class="chart-container">
+                    <canvas id="chartTarget2"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 页面加载调试 ---
+        console.log('页面开始加载');
+        window.addEventListener('load', function() {
+            console.log('页面加载完成');
+            console.log('按钮元素:', buttons);
+            console.log('状态元素:', statusDiv);
+            console.log('图表实例:', charts);
+        });
+        
+        // --- Chart.js 初始化 ---
+
+        /**
+         * 创建一个新的图表实例
+         * @param {string} canvasId - 画布元素的ID
+         * @returns {Chart} Chart.js 图表实例
+         */
+        function createNewChart(canvasId) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            return new Chart(ctx, {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { 
+                            title: { display: true, text: '时间点 (小时)' }
+                        },
+                        y: { 
+                            title: { display: true, text: '能耗值' }
+                        }
+                    },
+                    elements: { 
+                        point: { radius: 0 } // 不显示数据点，使线条更平滑
+                    },
+                    plugins: {
+                        legend: { 
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                boxWidth: 8
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 创建并存储所有图表实例
+        const charts = {
+            source: createNewChart('chartSource'),
+            target1: createNewChart('chartTarget1'),
+            target2: createNewChart('chartTarget2')
+        };
+        
+        // --- DOM 元素获取 ---
+        const buttons = {
+            source: document.getElementById('btn-source'),
+            target1: document.getElementById('btn-target1'),
+            target2: document.getElementById('btn-target2')
+        };
+        const statusDiv = document.getElementById('status');
+
+        // --- 核心逻辑 ---
+
+        /**
+         * 设置UI的加载状态
+         * @param {boolean} isLoading - 是否正在加载
+         */
+        function setLoadingState(isLoading) {
+            // 禁用所有按钮
+            Object.values(buttons).forEach(btn => btn.disabled = isLoading);
+            
+            // 如果不是加载状态，则根据逻辑重新启用按钮
+            if (!isLoading) {
+                // 基础模型按钮总是可用的
+                buttons.source.disabled = false;
+                // 如果基础模型已训练（通过自定义属性判断），则解锁目标按钮
+                if (buttons.target1.hasAttribute('data-unlocked')) {
+                    buttons.target1.disabled = false;
+                    buttons.target2.disabled = false;
+                }
+            }
+            statusDiv.textContent = isLoading ? '正在计算中，请稍候...' : '操作完成，请继续。';
+        }
+
+        /**
+         * 异步调用后端API来运行模型
+         * @param {string} region - 'source', 'target1', or 'target2'
+         */
+        async function runModel(region) {
+            console.log(`开始运行模型，区域: ${region}`);
+            setLoadingState(true);
+            try {
+                console.log('发送请求到 /run_model');
+                const response = await fetch('/run_model', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ region: region })
+                });
+
+                console.log('收到响应，状态码:', response.status);
+                if (!response.ok) throw new Error(`服务器错误: ${response.statusText}`);
+                
+                const data = await response.json();
+                console.log('响应数据:', data);
+
+                if (data.status === 'error') {
+                    console.error('服务器返回错误:', data.message);
+                    statusDiv.textContent = `错误: ${data.message}`;
+                    setLoadingState(false);
+                    return;
+                }
+
+                console.log('更新状态信息:', data.message);
+                statusDiv.textContent = data.message;
+                console.log('调用updateChart函数');
+                updateChart(region, data);
+
+                if (region === 'source') {
+                    console.log('标记基础模型已训练，解锁目标按钮');
+                    // 添加一个自定义属性来标记基础模型已训练
+                    buttons.target1.setAttribute('data-unlocked', 'true');
+                }
+
+            } catch (error) {
+                console.error('请求失败:', error);
+                statusDiv.textContent = `请求失败: ${error.message}`;
+            } finally {
+                // 无论成功或失败，都恢复UI状态
+                console.log('恢复UI状态');
+                setLoadingState(false);
+            }
+        }
+
+        /**
+         * 根据后端返回的数据更新对应的图表
+         * @param {string} region - 目标区域
+         * @param {object} data - 从API获取的数据
+         */
+        function updateChart(region, data) {
+            console.log('更新图表数据:', data);
+            
+            let targetChart;
+            let datasets;
+
+            if (region === 'source') {
+                targetChart = charts.source;
+                datasets = [
+                    {
+                        label: '真实能耗 (7天)',
+                        data: data.actual,
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3
+                    },
+                    {
+                        label: '模型预测',
+                        data: data.predicted,
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        tension: 0.3
+                    }
+                ];
+            } else {
+                targetChart = (region === 'target1') ? charts.target1 : charts.target2;
+                
+                // 检查数据是否存在
+                console.log('检查迁移学习数据...');
+                console.log('data.predicted_base:', data.predicted_base);
+                console.log('data.predicted_transfer:', data.predicted_transfer);
+                console.log('data对象的所有键:', Object.keys(data));
+                
+                if (!data.predicted_base || !data.predicted_transfer) {
+                    console.error('迁移学习数据缺失:', data);
+                    console.error('predicted_base存在:', !!data.predicted_base);
+                    console.error('predicted_transfer存在:', !!data.predicted_transfer);
+                    statusDiv.textContent = '错误: 迁移学习数据缺失';
+                    return;
+                } else {
+                    console.log('迁移学习数据验证通过');
+                }
+                
+                datasets = [
+                    {
+                        label: '真实能耗 (30天)',
+                        data: data.actual,
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 3,
+                        tension: 0.3
+                    },
+                    {
+                        label: '基础模型直接预测',
+                        data: data.predicted_base,
+                        borderColor: 'rgba(255, 159, 64, 1)',
+                        borderWidth: 2,
+                        borderDash: [10, 5],
+                        tension: 0.3
+                    },
+                    {
+                        label: '迁移学习后预测',
+                        data: data.predicted_transfer,
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3
+                    }
+                ];
+            }
+            
+            console.log('数据集:', datasets);
+            targetChart.data.labels = data.labels;
+            targetChart.data.datasets = datasets;
+            targetChart.update();
+        }
+    </script>
+</body>
+</html>
